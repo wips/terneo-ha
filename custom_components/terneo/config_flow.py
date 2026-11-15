@@ -3,15 +3,23 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_EMAIL, CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
-from .const import DOMAIN
+from .auth import CloudAuthError, CloudDeviceNotFound, async_fetch_totp_key
+from .const import CONF_TOTP_KEY, DOMAIN
 from .device import TerneoDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -248,6 +256,10 @@ class InvalidHost(HomeAssistantError):
     """Error to indicate there is an invalid hostname."""
 
 
+class _MissingCredentials(Exception):
+    """Neither a TOTP key nor a full email and password were given."""
+
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Terneo."""
 
@@ -255,7 +267,79 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: Optional[Dict[str, Any]] = None
     ) -> FlowResult:
         """Manage the options."""
-        return await self.async_step_schedule()
+        return self.async_show_menu(step_id="init", menu_options=["auth", "schedule"])
+
+    async def async_step_auth(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> FlowResult:
+        """Set the TOTP key needed when the device's LAN lock is on.
+
+        The key is fetched from my.terneo with the account email and password,
+        or pasted directly. Only the key is stored, never the password.
+        """
+        errors: Dict[str, str] = {}
+        if user_input is not None:
+            email = user_input.get(CONF_EMAIL, "").strip()
+            password = user_input.get(CONF_PASSWORD, "")
+            totp_key = user_input.get(CONF_TOTP_KEY, "").strip()
+            try:
+                if email or password:
+                    if not (email and password):
+                        raise _MissingCredentials
+                    totp_key = await async_fetch_totp_key(
+                        async_get_clientsession(self.hass),
+                        email,
+                        password,
+                        self.config_entry.data["serial_number"],
+                    )
+                if not totp_key:
+                    raise _MissingCredentials
+            except _MissingCredentials:
+                errors["base"] = "missing_credentials"
+            except CloudAuthError:
+                errors["base"] = "invalid_auth"
+            except CloudDeviceNotFound:
+                errors["base"] = "device_not_in_account"
+            except aiohttp.ClientError as err:
+                _LOGGER.error("Failed to reach my.terneo: %s", err)
+                errors["base"] = "cloud_unreachable"
+            else:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={**self.config_entry.data, CONF_TOTP_KEY: totp_key},
+                )
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                )
+                return self.async_create_entry(title="", data=dict(self.config_entry.options))
+
+        return self.async_show_form(
+            step_id="auth",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_EMAIL): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.EMAIL)
+                    ),
+                    vol.Optional(CONF_PASSWORD): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                    vol.Optional(CONF_TOTP_KEY): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "status": "set" if self.config_entry.data.get(CONF_TOTP_KEY) else "not set",
+            },
+        )
+
+    def _make_device(self) -> TerneoDevice:
+        return TerneoDevice(
+            self.config_entry.data[CONF_HOST],
+            self.config_entry.data["serial_number"],
+            self.config_entry.data.get(CONF_TOTP_KEY),
+        )
 
     async def async_step_schedule(
         self, user_input: Optional[Dict[str, Any]] = None
@@ -312,11 +396,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def _get_current_schedule(self) -> Dict[str, str]:
         """Get current schedule from device."""
         try:
-            # Get device from coordinator
-            host = self.config_entry.data[CONF_HOST]
-            serial_number = self.config_entry.data["serial_number"]
-
-            device = TerneoDevice(host, serial_number)
+            device = self._make_device()
             schedule = await device.get_schedule()
             await device.close()
 
@@ -347,11 +427,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def _save_schedule(self, user_input: Dict[str, Any]) -> None:
         """Save schedule to device."""
-        # Get device from coordinator
-        host = self.config_entry.data[CONF_HOST]
-        serial_number = self.config_entry.data["serial_number"]
-
-        device = TerneoDevice(host, serial_number)
+        device = self._make_device()
 
         try:
             # Map day names to numbers

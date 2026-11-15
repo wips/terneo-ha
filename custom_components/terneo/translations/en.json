@@ -37,7 +37,20 @@
     "step": {
       "init": {
         "title": "Terneo Options",
-        "description": "Configure options for your Terneo device"
+        "description": "Configure options for your Terneo device",
+        "menu_options": {
+          "auth": "Authentication (LAN lock)",
+          "schedule": "Schedule"
+        }
+      },
+      "auth": {
+        "title": "Authentication",
+        "description": "Needed only when the device's LAN lock (bLc) is on: the device then ignores changes from Home Assistant unless they are signed with its TOTP key. Enter your my.terneo email and password to fetch the key (only the key is stored), or paste the key directly. Key is currently: {status}.",
+        "data": {
+          "email": "my.terneo email",
+          "password": "my.terneo password",
+          "totp_key": "TOTP key"
+        }
       },
       "schedule": {
         "title": "Schedule Configuration for {device_name}",
@@ -54,7 +67,11 @@
       }
     },
     "error": {
-      "save_failed": "Failed to save schedule to device"
+      "save_failed": "Failed to save schedule to device",
+      "missing_credentials": "Enter both email and password, or a TOTP key.",
+      "invalid_auth": "my.terneo rejected the email or password.",
+      "device_not_in_account": "This device is not in that my.terneo account.",
+      "cloud_unreachable": "Could not reach my.terneo. Try again or paste the key."
     },
     "abort": {
       "save_failed": "Failed to save schedule"

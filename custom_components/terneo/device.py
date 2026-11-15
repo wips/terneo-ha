@@ -22,16 +22,25 @@ from .const import (
     PARAM_TYPE_UINT32,
 )
 
+from .auth import totp_token
+
 _LOGGER = logging.getLogger(__name__)
+
+
+class WriteRejected(Exception):
+    """The device answered a write but kept its old values."""
 
 
 class TerneoDevice:
     """Represents a Terneo device."""
 
-    def __init__(self, host: str, serial_number: str) -> None:
+    def __init__(
+        self, host: str, serial_number: str, totp_key: Optional[str] = None
+    ) -> None:
         """Initialize the device."""
         self.host = host
         self.serial_number = serial_number
+        self.totp_key = totp_key or None
         self._session: Optional[aiohttp.ClientSession] = None
         self._parameters: Dict[int, Any] = {}
         self._telemetry: Dict[str, Any] = {}
@@ -110,35 +119,80 @@ class TerneoDevice:
 
         return self._schedule
 
-    async def set_parameters(self, parameters: Dict[int, Any]) -> bool:
-        """Set device parameters."""
-        if not parameters:
-            return True
+    async def _write_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a write request, signed with TOTP when a key is configured.
 
-        # Convert parameters to the required format
+        The device expects ``sn``, then ``time`` and ``auth``, then the data.
+        The token is computed from the device's own clock, which runs in its
+        local time zone, so read it right before signing.
+        """
+        data: Dict[str, Any] = {"sn": self.serial_number}
+        if self.totp_key:
+            telemetry = await self._send_request({"cmd": CMD_GET_TELEMETRY})
+            device_time = int(telemetry["time"])
+            data["time"] = str(device_time)
+            data["auth"] = totp_token(self.totp_key, device_time)
+        data.update(payload)
+        return data
+
+    def _rejection_hint(self) -> str:
+        if self.totp_key:
+            return "the TOTP key may be outdated (it changes when the device is re-bound in my.terneo)"
+        return "the LAN lock is probably on; set the TOTP key in the integration options"
+
+    async def set_parameters(self, parameters: Dict[int, Any]) -> None:
+        """Set device parameters; raise WriteRejected if the device ignores them."""
+        if not parameters:
+            return
+
         par_data = []
         for param_id, value in parameters.items():
-            # Determine parameter type based on common parameter IDs
             param_type = self._get_parameter_type(param_id)
-            par_data.append([param_id, param_type, str(value)])
+            par_data.append([param_id, param_type, self._format_parameter_value(value)])
 
-        data = {
-            "sn": self.serial_number,
-            "par": par_data
+        response = await self._send_request(await self._write_request({"par": par_data}))
+
+        # The device replies with its full parameter list, whether or not it
+        # accepted the write, so compare the values it reports.
+        reported = {
+            param[0]: param[2] for param in response.get("par", []) if len(param) >= 3
         }
+        rejected = [
+            param_id for param_id, _, value in par_data if reported.get(param_id) != value
+        ]
+        for param in response.get("par", []):
+            if len(param) >= 3:
+                self._parameters[param[0]] = self._parse_parameter_value(param[2], param[1])
+        if rejected:
+            # If some values went through, auth is fine and the device
+            # refused these particular values (e.g. out of range).
+            hint = (
+                self._rejection_hint()
+                if len(rejected) == len(par_data)
+                else "the device refused these values"
+            )
+            raise WriteRejected(
+                f"Device {self.serial_number} ignored parameters {rejected}: {hint}"
+            )
 
-        response = await self._send_request(data)
-        return response.get("success") == "true"
+    async def set_schedule(self, day: str, periods: List[List[int]]) -> None:
+        """Set schedule for one day; raise WriteRejected if the device ignores it."""
+        response = await self._send_request(await self._write_request({"tt": {day: periods}}))
 
-    async def set_schedule(self, day: str, periods: List[List[int]]) -> bool:
-        """Set schedule for a specific day."""
-        data = {
-            "sn": self.serial_number,
-            "tt": {day: periods}
-        }
+        # The device replies with its full schedule.
+        if "tt" in response:
+            self._schedule = response["tt"]
+        if response.get("tt", {}).get(day) != periods:
+            raise WriteRejected(
+                f"Device {self.serial_number} ignored schedule for day {day}: {self._rejection_hint()}"
+            )
 
-        response = await self._send_request(data)
-        return response.get("success") == "true"
+    @staticmethod
+    def _format_parameter_value(value: Any) -> str:
+        """Format a value the way the device API expects (bools as 1/0)."""
+        if isinstance(value, bool):
+            return "1" if value else "0"
+        return str(value)
 
     def _parse_parameter_value(self, value: str, param_type: int) -> Any:
         """Parse parameter value based on type."""

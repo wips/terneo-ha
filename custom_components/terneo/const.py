@@ -12,6 +12,12 @@ SCAN_INTERVAL: Final = 30
 API_ENDPOINT: Final = "/api.cgi"
 API_TIMEOUT: Final = 10
 
+# Auth (LAN lock, firmware 2.4+)
+CONF_TOTP_KEY: Final = "totp_key"
+CLOUD_API_URL: Final = "https://my.hmarex.com/api"
+TOTP_INTERVAL: Final = 30
+TOTP_DIGITS: Final = 9
+
 # Commands
 CMD_GET_PARAMETERS: Final = 1
 CMD_GET_SCHEDULE: Final = 2
