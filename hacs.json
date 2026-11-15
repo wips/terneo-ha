@@ -1,7 +1,7 @@
 {
   "name": "Terneo",
   "content_in_root": false,
-  "country": ["RU", "BY", "KZ", "UA"],
+  "country": ["UA", "KZ"],
   "domains": ["climate", "sensor", "switch", "number"],
   "homeassistant": "2023.1.0",
   "iot_class": "Local Polling",
