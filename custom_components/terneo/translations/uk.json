@@ -1,0 +1,237 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Додати пристрій Terneo",
+        "description": "Введіть IP-адресу вашого пристрою Terneo",
+        "data": {
+          "host": "IP-адреса"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Підтвердити пристрій Terneo",
+        "description": "Додати пристрій Terneo {name} за адресою {host}?"
+      },
+      "reconfigure": {
+        "title": "Переналаштувати пристрій Terneo",
+        "description": "Оновіть IP-адресу цього пристрою Terneo",
+        "data": {
+          "host": "IP-адреса"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не вдалося підключитися до пристрою. Перевірте IP-адресу та переконайтеся, що пристрій доступний.",
+      "invalid_host": "Неправильний формат IP-адреси.",
+      "unknown": "Сталася неочікувана помилка."
+    },
+    "abort": {
+      "already_configured": "Пристрій уже налаштовано",
+      "single_instance_allowed": "Дозволено лише один екземпляр інтеграції Terneo",
+      "cannot_connect": "Не вдається підключитися до пристрою",
+      "different_device": "Це інший пристрій, ніж той, що був налаштований спочатку",
+      "unknown": "Сталася невідома помилка"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Налаштування Terneo",
+        "description": "Налаштуйте параметри вашого пристрою Terneo",
+        "menu_options": {
+          "auth": "Авторизація (блокування LAN)",
+          "schedule": "Розклад"
+        }
+      },
+      "auth": {
+        "title": "Авторизація",
+        "description": "Потрібна лише тоді, коли на пристрої увімкнено блокування LAN (bLc): у такому разі пристрій ігнорує зміни з Home Assistant, якщо вони не підписані його TOTP-ключем. Введіть email і пароль my.terneo, щоб отримати ключ (зберігається лише ключ), або вставте ключ вручну. Ключ зараз: {status}.",
+        "data": {
+          "email": "Email my.terneo",
+          "password": "Пароль my.terneo",
+          "totp_key": "TOTP-ключ"
+        }
+      },
+      "schedule": {
+        "title": "Налаштування розкладу для {device_name}",
+        "description": "Налаштуйте тижневий розклад для вашого пристрою Terneo. Формат: {format_example}",
+        "data": {
+          "monday_periods": "Понеділок",
+          "tuesday_periods": "Вівторок",
+          "wednesday_periods": "Середа",
+          "thursday_periods": "Четвер",
+          "friday_periods": "П'ятниця",
+          "saturday_periods": "Субота",
+          "sunday_periods": "Неділя"
+        }
+      }
+    },
+    "error": {
+      "save_failed": "Не вдалося зберегти розклад на пристрої",
+      "missing_credentials": "Введіть email і пароль або TOTP-ключ.",
+      "invalid_auth": "my.terneo відхилив email або пароль.",
+      "device_not_in_account": "Цього пристрою немає в акаунті my.terneo.",
+      "cloud_unreachable": "Не вдалося з'єднатися з my.terneo. Спробуйте ще раз або вставте ключ."
+    },
+    "abort": {
+      "save_failed": "Не вдалося зберегти розклад"
+    }
+  },
+  "entity": {
+    "climate": {
+      "terneo": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "schedule": "За розкладом",
+              "manual": "Ручний",
+              "away": "Відпустка",
+              "temporary": "Тимчасовий"
+            }
+          }
+        },
+        "preset_mode": {
+          "schedule": "За розкладом",
+          "manual": "Ручний",
+          "away": "Відпустка",
+          "temporary": "Тимчасовий"
+        }
+      }
+    },
+    "sensor": {
+      "floor_temperature": {
+        "name": "Температура підлоги"
+      },
+      "air_temperature": {
+        "name": "Температура повітря"
+      },
+      "setpoint_temperature": {
+        "name": "Задана температура"
+      },
+      "mcu_temperature": {
+        "name": "Температура мікроконтролера"
+      },
+      "overheat_temperature": {
+        "name": "Температура датчика перегріву"
+      },
+      "wifi_signal": {
+        "name": "Сигнал Wi-Fi"
+      },
+      "power": {
+        "name": "Потужність"
+      },
+      "heating_state": {
+        "name": "Стан нагріву"
+      },
+      "floor_sensor_error": {
+        "name": "Обрив датчика підлоги"
+      },
+      "floor_sensor_short": {
+        "name": "Коротке замикання датчика підлоги"
+      },
+      "air_sensor_error": {
+        "name": "Обрив датчика повітря"
+      },
+      "air_sensor_short": {
+        "name": "Коротке замикання датчика повітря"
+      },
+      "overheat": {
+        "name": "Перегрів"
+      },
+      "window_open": {
+        "name": "Виявлення відкритого вікна"
+      },
+      "proportional_mode": {
+        "name": "Пропорційний режим"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Живлення"
+      },
+      "child_lock": {
+        "name": "Захист від дітей"
+      },
+      "night_brightness": {
+        "name": "Нічна яскравість"
+      },
+      "pre_heating": {
+        "name": "Попередній нагрів"
+      },
+      "window_open_detection": {
+        "name": "Виявлення відкритого вікна"
+      },
+      "inverted_relay": {
+        "name": "Інверсне реле"
+      }
+    },
+    "number": {
+      "manual_floor_temp": {
+        "name": "Ручна температура підлоги"
+      },
+      "manual_air_temp": {
+        "name": "Ручна температура повітря"
+      },
+      "floor_temp_min": {
+        "name": "Мінімальна температура підлоги"
+      },
+      "floor_temp_max": {
+        "name": "Максимальна температура підлоги"
+      },
+      "air_temp_min": {
+        "name": "Мінімальна температура повітря"
+      },
+      "air_temp_max": {
+        "name": "Максимальна температура повітря"
+      },
+      "brightness": {
+        "name": "Яскравість"
+      },
+      "hysteresis": {
+        "name": "Гістерезис"
+      }
+    }
+  },
+  "services": {
+    "set_schedule": {
+      "name": "Встановити розклад",
+      "description": "Встановити тижневий розклад для пристрою Terneo",
+      "fields": {
+        "day": {
+          "name": "День тижня",
+          "description": "День тижня (0=понеділок, 1=вівторок, ..., 6=неділя)"
+        },
+        "periods": {
+          "name": "Періоди розкладу",
+          "description": "Список періодів часу з температурами"
+        }
+      }
+    },
+    "get_schedule": {
+      "name": "Отримати розклад",
+      "description": "Отримати поточний розклад пристрою Terneo"
+    },
+    "set_away_mode": {
+      "name": "Встановити режим відпустки",
+      "description": "Встановити режим відпустки з часом початку та завершення",
+      "fields": {
+        "start_time": {
+          "name": "Час початку",
+          "description": "Час початку режиму відпустки"
+        },
+        "end_time": {
+          "name": "Час завершення",
+          "description": "Час завершення режиму відпустки"
+        },
+        "floor_temperature": {
+          "name": "Температура підлоги",
+          "description": "Температура підлоги в режимі відпустки"
+        },
+        "air_temperature": {
+          "name": "Температура повітря",
+          "description": "Температура повітря в режимі відпустки"
+        }
+      }
+    }
+  }
+}
