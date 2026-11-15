@@ -8,6 +8,7 @@ from datetime import timedelta
 from typing import Any, Dict, List, Optional, Set
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -15,7 +16,7 @@ from .const import (
     SCAN_INTERVAL,
     UDP_PORT,
 )
-from .device import TerneoDevice
+from .device import TerneoDevice, WriteRejected
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,10 +69,9 @@ class TerneoCoordinator(DataUpdateCoordinator):
             # Get telemetry (most important for real-time data)
             telemetry = await device.get_telemetry()
 
-            # Get parameters less frequently (they don't change often)
-            parameters = device._parameters
-            if not parameters:
-                parameters = await device.get_parameters()
+            # Parameters can change from the device buttons or the my.terneo
+            # app, so read them on every poll too
+            parameters = await device.get_parameters()
 
             return {
                 "telemetry": telemetry,
@@ -87,12 +87,14 @@ class TerneoCoordinator(DataUpdateCoordinator):
                 "available": False,
             }
 
-    async def add_device(self, host: str, serial_number: str) -> TerneoDevice:
+    async def add_device(
+        self, host: str, serial_number: str, totp_key: Optional[str] = None
+    ) -> TerneoDevice:
         """Add a device manually."""
         if serial_number in self.devices:
             return self.devices[serial_number]
 
-        device = TerneoDevice(host, serial_number)
+        device = TerneoDevice(host, serial_number, totp_key)
 
         # Test connection
         try:
@@ -128,16 +130,17 @@ class TerneoCoordinator(DataUpdateCoordinator):
             return False
 
         try:
-            result = await device.set_parameters(parameters)
-            if result:
-                # Trigger immediate update to get new state
-                await self.async_request_refresh()
-            return result
+            await device.set_parameters(parameters)
+        except WriteRejected as err:
+            raise HomeAssistantError(str(err)) from err
         except Exception as err:
-            _LOGGER.error(
-                "Failed to set parameters for device %s: %s", serial_number, err
-            )
-            return False
+            raise HomeAssistantError(
+                f"Failed to set parameters for device {serial_number}: {err}"
+            ) from err
+        finally:
+            # Refresh either way so the UI shows what the device really has
+            await self.async_request_refresh()
+        return True
 
     async def set_device_schedule(
         self, serial_number: str, day: str, periods: List[List[int]]
@@ -148,13 +151,13 @@ class TerneoCoordinator(DataUpdateCoordinator):
             return False
 
         try:
-            result = await device.set_schedule(day, periods)
-            if result:
-                # Trigger immediate update to get new state
-                await self.async_request_refresh()
-            return result
+            await device.set_schedule(day, periods)
+        except WriteRejected as err:
+            raise HomeAssistantError(str(err)) from err
         except Exception as err:
-            _LOGGER.error(
-                "Failed to set schedule for device %s: %s", serial_number, err
-            )
-            return False
+            raise HomeAssistantError(
+                f"Failed to set schedule for device {serial_number}: {err}"
+            ) from err
+        finally:
+            await self.async_request_refresh()
+        return True

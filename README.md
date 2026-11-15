@@ -140,7 +140,20 @@ data:
 
 - Terneo Wi-Fi thermostat with firmware 2.3+
 - Device must be connected to the same network as Home Assistant
-- Local API access must be enabled (unlocked for LAN operation)
+- For control (not just monitoring): either the LAN lock is off, or a TOTP key is set (see below)
+
+## LAN Lock and TOTP Authentication
+
+Firmware 2.4+ has a LAN lock (`bLc` = `LAn` in the device menu, parameter `androidBlock`). While it is on, the device still reports its state, but **silently ignores every change sent from the local network** unless the request is signed with a TOTP token.
+
+Two ways to make control work:
+
+1. **Keep the lock on and set the TOTP key** (recommended): Settings → Devices & services → Terneo → Configure → Authentication. Enter your my.terneo email and password to fetch the key automatically (only the key is stored, not the password), or paste the key. The key changes when the device is re-bound to a my.terneo account; fetch it again if changes start failing.
+2. **Turn the lock off** on the device: `bLc` → `oFF`. Then anyone on your network can control the thermostat.
+
+If a change is rejected, Home Assistant shows an error and the entity returns to the device's real value.
+
+Token details (not fully stated in the official docs, confirmed on a device): RFC 6238 TOTP, HMAC-SHA1, 30-second step, 9 digits, secret = the `totp_key` string as ASCII bytes, time = the device's own clock in seconds since 2000-01-01 (its local time zone, read from the `time` telemetry field).
 
 ## Network Configuration
 
